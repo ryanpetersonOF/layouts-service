@@ -1,5 +1,6 @@
-import {Bounds, TabIdentifier, TabPackage, TabWindowOptions} from '../../client/types';
+import {ApplicationUIConfig, Bounds, TabIdentifier, TabPackage, TabWindowOptions} from '../../client/types';
 
+import {APIHandler} from './APIHandler';
 import {DragWindowManager} from './DragWindowManager';
 import {EventHandler} from './EventHandler';
 import {Tab} from './Tab';
@@ -19,6 +20,11 @@ export class TabService {
      * Handle of this Tab Service Instance.
      */
     public static INSTANCE: TabService;
+
+    /**
+     * Handle to the Tabbing API Handler
+     */
+    public apiHandler: APIHandler;
 
     /**
      * Contains all the tabsets of this service.
@@ -45,21 +51,41 @@ export class TabService {
      */
     private _zIndexer: ZIndexer = new ZIndexer();
 
+    private _applicationUIConfigurations: ApplicationUIConfig[];
+
 
     /**
      * Constructor of the TabService Class.
      */
     constructor() {
         this._tabGroups = [];
+        this._applicationUIConfigurations = [];
         this._dragWindowManager = new DragWindowManager();
         this._dragWindowManager.init();
 
         this._eventHandler = new EventHandler(this);
+        this.apiHandler = new APIHandler(this);
 
         this.mTabApiEventHandler = new TabAPIActionProcessor(this);
         this.mTabApiEventHandler.init();
 
         TabService.INSTANCE = this;
+    }
+
+    public getAppUIConfig(uuid: string) {
+        const conf = this._applicationUIConfigurations.find(config => config.uuid === uuid);
+
+        if (conf) {
+            return conf.config;
+        }
+
+        return;
+    }
+
+    public addAppUIConfig(uuid: string, config: TabWindowOptions) {
+        if (!this.getAppUIConfig(uuid)) {
+            this._applicationUIConfigurations.push({uuid, config});
+        }
     }
 
     /**
@@ -69,7 +95,7 @@ export class TabService {
      */
     public async addTabGroup(windowOptions: TabWindowOptions): Promise<TabGroup> {
         const group = new TabGroup(windowOptions);
-        await group.init();
+        // await group.init();
 
         this._tabGroups.push(group);
 
@@ -129,6 +155,26 @@ export class TabService {
         if (group) {
             return group.getTab(ID);
         }
+
+        return;
+    }
+
+    /**
+     * Creates a new tab group with provided tabs.  Will use the UI and position of the first Identity provided for positioning.
+     * @param tabs An array of Identities to add to a group.
+     */
+    public async createTabGroupWithTabs(tabs: TabIdentifier[]) {
+        if (tabs.length === 0) {
+            return Promise.reject('Must provide at least 1 Tab Identifier');
+        }
+        const group = await this.addTabGroup({});
+
+
+        for (const tab of tabs) {
+            await group.addTab({tabID: tab});
+        }
+
+        group.realignApps();
 
         return;
     }
